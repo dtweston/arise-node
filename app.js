@@ -1,6 +1,8 @@
 var express = require('express');
 var bodyParser = require('body-parser');
 var ws = require('nodejs-websocket');
+var https = require('https');
+const url = require('url');
 
 var accountSid = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 var authToken = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
@@ -16,6 +18,46 @@ app.get('/', function(req, res) {
 });
 
 var cxnMap = {};
+
+app.post('/login', function(req, res) {
+  var authUrl = req.get('X-Auth-Service-Provider')
+  var authSig = req.get('X-Verify-Credentials-Authorization')
+  console.log('AuthUrl ' + authUrl);
+  console.log('Sig ' + authSig);
+
+  var urlObject = url.parse(authUrl);
+
+  var options = {
+    host: urlObject.host,
+    path: urlObject.path,
+    headers: { 'Authorization': authSig }
+  };
+  var request = https.request(options, function(response) {
+    console.log(`status: ${response.statusCode}`);
+    console.log(`headers: ${response.headers}`);
+    console.log(`raw headers: ${response.rawHeaders}`);
+    var str = ''
+    response.on('error', function(err) {
+      console.log(err);
+      res.status(400).send('BAD');
+    });
+    response.on('data', function(chunk) {
+      str += chunk;
+    });
+
+    response.on('end', function() {
+      console.log(str);
+      res.status(401).send('LOGIN');
+    });
+  });
+
+  request.on('error', function(e) {
+    console.log(`error with request: ${e.message}`);
+  });
+
+  request.end();
+
+});
 
 app.post('/events', function(req, res) {
   var sid = req.body["CallSid"];
@@ -51,7 +93,7 @@ app.post('/calls', function(req, res) {
   res.status(201).send({ "err": "none" });
 });
 
-app.listen(3002, function() {
+app.listen(process.env.WEB_PORT, function() {
     console.log('Example app listening on port 3002');
 });
 
@@ -88,7 +130,7 @@ var server = ws.createServer(function(conn) {
   conn.on('close', function(code, reason) {
     console.log('Connection closed.');
   });
-}).listen(3003);
+}).listen(process.env.WEBSOCKET_PORT);
 
 console.log('Started WebSocket server');
 
